@@ -99,60 +99,54 @@ def how_many_options_for_winning_in_next_move(board: Board, player_index: int) -
 
 def heuristic_score(board: Board) -> int:
     """
-    Heuristic score of the board state for the player that just played.
-    Works only for 2 players, and for 4 in a row.
+    Heuristic score of the board.
+    Works only for 2 players, with ids 1 and 2. 2 is maximizing, 1 is minimizing.
     :param board: board state
-    :return: number, where higher is better for the given player
+    :return: number, where player id 2 is maximizing and player id 1 is minimizing
     """
 
-    player_index = board.get_last_player_index()
-    opponent_index = flip_player_index(player_index)
+    maximizing = 2
+    minimizing = 1
 
     # if the game ended, return the score based on who won
     if board.game_ended():
-        if board.get_winner() == player_index:
+        if board.get_winner() == maximizing:
             return 1000
-        elif board.get_winner() == opponent_index:
+        elif board.get_winner() == minimizing:
             return -1000
         else:
             return 0
 
-    # center column +2
-    center_column = board.get_state().shape[1] // 2
-    center_column_score = board.get_state().T[center_column].tolist().count(player_index) * 2
+    # 3 in a row +10
+    connecting_threes_score = 10 * (how_many_n_in_a_row(3, board.get_state(), maximizing) +
+                                    how_many_n_in_a_column(3, board.get_state(), maximizing) +
+                                    how_many_n_anti_skew(3, board.get_state(), maximizing) +
+                                    how_many_n_skew(3, board.get_state(), maximizing))
 
-    # 3 in a row +5
-    connecting_threes_score = 5 * (how_many_n_in_a_row(3, board.get_state(), player_index) +
-                                   how_many_n_in_a_column(3, board.get_state(), player_index) +
-                                   how_many_n_anti_skew(3, board.get_state(), player_index) +
-                                   how_many_n_skew(3, board.get_state(), player_index))
+    # opponent's 2 in a row -4
+    o_connecting_twos_score = 4 * (how_many_n_in_a_row(2, board.get_state(), minimizing) +
+                                   how_many_n_in_a_column(2, board.get_state(), minimizing) +
+                                   how_many_n_anti_skew(2, board.get_state(), minimizing) +
+                                   how_many_n_skew(2, board.get_state(), minimizing))
 
-    # opponent's 2 in a row -2
-    opponent_connecting_twos_score = 2 * (how_many_n_in_a_row(2, board.get_state(), opponent_index) +
-                                          how_many_n_in_a_column(2, board.get_state(), opponent_index) +
-                                          how_many_n_anti_skew(2, board.get_state(), opponent_index) +
-                                          how_many_n_skew(2, board.get_state(), opponent_index))
+    # opponent's winnable 3 in a rows -120
+    o_winnables_score = 120 * how_many_options_for_winning_in_next_move(board, minimizing)
 
-    # opponent's winnable 3 in a rows -100
-    opponent_winnables_score = 100 * how_many_options_for_winning_in_next_move(board, opponent_index)
+    base_score = get_allis_score(board)
 
-    return center_column_score + connecting_threes_score - opponent_connecting_twos_score - opponent_winnables_score
+    return base_score + connecting_threes_score - o_connecting_twos_score - o_winnables_score
 
 
-def alternate_heuristic_score_for_6_by_7_board(board: Board) -> int:
+def get_allis_score(board: Board) -> int:
     """
-    Heuristic score of the board state for the player that just played.
-    Does not check for game end, assumes this has already been checked.
-    Based on http://connect4hci.weebly.com/.
+    A base heuristic function for the board state.
+    Inspired by http://connect4hci.weebly.com/, that is based on the Allis paper, that solved connect 4
     :param board: board state
-    :return: number, where higher is better for the given player
+    :return:
     """
-    opponent_index = board.get_last_player_index()
-    player_index = flip_player_index(opponent_index)
-
-    # map of how "good" each cell is, based on how many of all possible 4 in a rows it is a part of
-    # I named it allis_map because it's based on the Allis paper, that solved connect 4
-    allis_map = np.array([
+    maximizing = 2
+    minimizing = 1
+    a_map = np.array([
         [3, 4,  5,  7,  5, 4, 3],
         [4, 6,  8,  9,  8, 6, 4],
         [5, 8, 11, 13, 11, 8, 5],
@@ -160,80 +154,68 @@ def alternate_heuristic_score_for_6_by_7_board(board: Board) -> int:
         [4, 6,  8,  9,  8, 6, 4],
         [3, 4,  5,  7,  5, 4, 3]])
 
-    base_score = 0
+    allis_score = 0
     for (r, c), val in np.ndenumerate(board.get_state()):
-        if val == player_index:
-            base_score += allis_map[r][c]
-        elif val == flip_player_index(player_index):
-            base_score -= allis_map[r][c]
+        if val == maximizing:
+            allis_score += a_map[r][c]
+        elif val == minimizing:
+            allis_score -= a_map[r][c]
 
-    weighed_plus = \
-        3 * 2 * how_many_n_in_a_row(2, board.get_state(), player_index) + \
-        3 * 2 * how_many_n_in_a_column(2, board.get_state(), player_index) + \
-        3 * 2 * how_many_n_anti_skew(2, board.get_state(), player_index) + \
-        3 * 2 * how_many_n_skew(2, board.get_state(), player_index) + \
-        3 * 5 * how_many_n_in_a_row(3, board.get_state(), player_index) + \
-        3 * 5 * how_many_n_in_a_column(3, board.get_state(), player_index) + \
-        3 * 5 * how_many_n_anti_skew(3, board.get_state(), player_index) + \
-        3 * 5 * how_many_n_skew(3, board.get_state(), player_index)
+    return allis_score
 
-    weighed_minus = \
-        3 * 2 * how_many_n_in_a_row(2, board.get_state(), flip_player_index(player_index)) + \
-        3 * 2 * how_many_n_in_a_column(2, board.get_state(), flip_player_index(player_index)) + \
-        3 * 2 * how_many_n_anti_skew(2, board.get_state(), flip_player_index(player_index)) + \
-        3 * 2 * how_many_n_skew(2, board.get_state(), flip_player_index(player_index)) + \
-        3 * 100 * how_many_options_for_winning_in_next_move(board, flip_player_index(player_index))
-
-    return base_score + weighed_plus - weighed_minus
-
-
-def negamax(depth: int, board: Board, alpha: int = -np.inf, beta: int = np.inf) -> [int, int]:
+def minimax(depth: int, board: Board, maximizing: bool, alpha: int = -np.inf, beta: int = np.inf) -> [int, int]:
     """
-    Negamax variant of the minimax algorithm. Bounded by depth.
+    Minimax algorithm. Bounded by depth.
     :param depth: current depth
     :param board: current board state
+    :param maximizing: whether the current player is maximizing or not. AI should be maximizing, opponent is minimizing.
     :param alpha: alpha value for alpha-beta pruning
     :param beta: beta value for alpha-beta pruning
-    :return: the best column to play and the score after playing the best column for the given player
+    :return: the score after playing the best column for the given player, and that column
     """
-    player_index = flip_player_index(board.get_last_player_index())
+    maximizing_player_index = 2
+    minimizing_player_index = 1
 
     if depth == 0 or board.game_ended():
-        logging.debug(f"depth: {depth}, score: {heuristic_score(board)} if player {player_index} plays column {board.get_last_player_column()}")
-        if board.game_ended():
-            logging.debug(f"game ended, winner: {board.get_winner()}, score: {heuristic_score(board)}")
-        return board.get_last_player_column(),\
-            heuristic_score(board) * 1 if board.get_last_player_index() == player_index else -1
+        return heuristic_score(board), -1
 
-    best_score = -np.inf
-    best_column = -1
+    if maximizing:
+        best_score = -np.inf
+        best_col = -1
+        for col in board.get_valid_steps():
+            board_copy = board.copy()
+            board_copy.step(maximizing_player_index, col)
+            score, _ = minimax(depth - 1, board_copy, False, alpha, beta)
+            logger.debug(f"for col {col}, score is {score}")
+            if score > best_score:
+                best_score = score
+                best_col = col
+            if best_score > beta:
+                logger.debug(f"pruning with beta, score: {score}, beta: {beta}")
+                break
+            alpha = max(alpha, best_score)
+    else:
+        best_score = np.inf
+        best_col = -1
+        for col in board.get_valid_steps():
+            board_copy = board.copy()
+            board_copy.step(minimizing_player_index, col)
+            score, _ = minimax(depth - 1, board_copy, True, alpha, beta)
+            if score < best_score:
+                best_score = score
+                best_col = col
+            if best_score < alpha:
+                logger.debug(f"pruning with alpha, score: {score}, alpha: {alpha}")
+                break
+            beta = min(beta, best_score)
 
-    for possible_step in board.get_valid_steps():  # might be worth ordering the steps
-        board_copy = board.copy()
-        board_copy.step(player_index, possible_step)
-        column, score = negamax(depth - 1, board_copy, -beta, -alpha)
-        score = -score  # negamax
-        if score > best_score:
-            best_column = column
-            best_score = score
-        alpha = max(alpha, score)
-        if alpha >= beta:
-            break
+    if best_col == -1:
+        logger.warning("No valid step found in minimax")
+        best_col = board.get_valid_steps()[0]
 
-    if best_column == -1:
-        logging.warning("no valid steps")
-        best_column = board.get_valid_steps()[0]
+    logger.debug(f"Minimax: depth: {depth}, maximizing: {maximizing}, best_col: {best_col}, best_score: {best_score}")
 
-    return best_column, best_score
-
-
-def flip_player_index(player_index: int) -> int:
-    """
-    Flip player index. 1 -> 2, 2 -> 1
-    :param player_index: player index
-    :return: flipped player index
-    """
-    return 3 - player_index
+    return best_score, best_col
 
 
 class StudentPlayer:
@@ -241,7 +223,7 @@ class StudentPlayer:
         self.__n_to_connect = n_to_connect
         self.__board_size = board_size
         self.__player_index = player_index
-        self.__other_player_index = flip_player_index(player_index)
+        self.__other_player_index = 3 - player_index
 
         self.__board = Board(self.__board_size, self.__n_to_connect)
 
@@ -254,7 +236,7 @@ class StudentPlayer:
         if last_player_col != -1:
             self.__board.step(self.__other_player_index, last_player_col)
 
-        col, score = negamax(5, self.__board.copy())
+        score, col = minimax(4, self.__board.copy(), True)
         logging.info(f"Player {self.__player_index} played {col} with score {score}")
 
         self.__board.step(self.__player_index, col)
