@@ -6,7 +6,7 @@ import numpy as np
 from board import Board
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename='student_player.log', level=logging.DEBUG)
+logging.basicConfig(filename='student_player.log', level=logging.INFO)
 
 
 def how_many_n_in_a_row(n: int, board_state: np.ndarray, player_index: int) -> int:
@@ -124,11 +124,13 @@ def heuristic_score(board: Board) -> int:
     return weighed_plus - weighed_minus
 
 
-def negamax(depth: int, board: Board) -> [int, int]:
+def negamax(depth: int, board: Board, alpha: int = -np.inf, beta: int = np.inf) -> [int, int]:
     """
     Negamax variant of the minimax algorithm. Bounded by depth.
     :param depth: current depth
     :param board: current board state
+    :param alpha: alpha value for alpha-beta pruning
+    :param beta: beta value for alpha-beta pruning
     :return: the best column to play and the score after playing the best column for the given player
     """
     player_index = flip_player_index(board.get_last_player_index())
@@ -142,14 +144,17 @@ def negamax(depth: int, board: Board) -> [int, int]:
     best_score = -np.inf
     best_column = -1
 
-    for possible_step in board.get_valid_steps():
+    for possible_step in board.get_valid_steps():  # might be worth ordering the steps
         board_copy = board.copy()
         board_copy.step(player_index, possible_step)
-        column, score = negamax(depth - 1, board_copy)
+        column, score = negamax(depth - 1, board_copy, -beta, -alpha)
         score = -score  # negamax
         if score > best_score:
             best_column = column
             best_score = score
+        alpha = max(alpha, score)
+        if alpha >= beta:
+            break
 
     return best_column, best_score
 
@@ -181,7 +186,7 @@ class StudentPlayer:
         if last_player_col != -1:
             self.__board.step(self.__other_player_index, last_player_col)
 
-        col, score = negamax(3, self.__board.copy())
+        col, score = negamax(6, self.__board.copy())
         logging.info(f"Player {self.__player_index} played {col} with score {score}")
 
         self.__board.step(self.__player_index, col)
