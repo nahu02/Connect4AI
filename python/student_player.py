@@ -81,6 +81,22 @@ def how_many_n_skew(n: int, board_state: np.ndarray, player_index: int) -> int:
     return how_many_n_anti_skew(n, np.flip(board_state, axis=1), player_index)
 
 
+def how_many_options_for_winning_in_next_move(board: Board, player_index: int) -> int:
+    """
+    Looks at all the legal moves player_index can make and counts how many of them will result in a win.
+    :param board: board state
+    :param player_index: player index to check all the legal moves for
+    :return: number between 0 and board width (inclusive) that represents how many legal moves will result in a win
+    """
+    result = 0
+    for move in board.get_valid_steps():
+        board_copy = board.copy()
+        board_copy.step(player_index, move)
+        if board_copy.game_ended() and board_copy.get_winner() == player_index:
+            result += 1
+    return result
+
+
 def heuristic_score(board: Board) -> int:
     """
     Heuristic score of the board state for the player that just played.
@@ -119,10 +135,7 @@ def heuristic_score(board: Board) -> int:
         2 * how_many_n_in_a_column(2, board.get_state(), flip_player_index(player_index)) + \
         2 * how_many_n_anti_skew(2, board.get_state(), flip_player_index(player_index)) + \
         2 * how_many_n_skew(2, board.get_state(), flip_player_index(player_index)) + \
-        4 * how_many_n_in_a_row(3, board.get_state(), flip_player_index(player_index)) + \
-        4 * how_many_n_in_a_column(3, board.get_state(), flip_player_index(player_index)) + \
-        4 * how_many_n_anti_skew(3, board.get_state(), flip_player_index(player_index)) + \
-        4 * how_many_n_skew(3, board.get_state(), flip_player_index(player_index))
+        100 * how_many_options_for_winning_in_next_move(board, flip_player_index(player_index))
 
     return weighed_plus - weighed_minus
 
@@ -135,7 +148,8 @@ def alternate_heuristic_score_for_6_by_7_board(board: Board) -> int:
     :param board: board state
     :return: number, where higher is better for the given player
     """
-    player_index = flip_player_index(board.get_last_player_index())
+    opponent_index = board.get_last_player_index()
+    player_index = flip_player_index(opponent_index)
 
     # map of how "good" each cell is, based on how many of all possible 4 in a rows it is a part of
     # I named it allis_map because it's based on the Allis paper, that solved connect 4
@@ -147,14 +161,31 @@ def alternate_heuristic_score_for_6_by_7_board(board: Board) -> int:
         [4, 6,  8,  9,  8, 6, 4],
         [3, 4,  5,  7,  5, 4, 3]])
 
-    score = 0
+    base_score = 0
     for (r, c), val in np.ndenumerate(board.get_state()):
         if val == player_index:
-            score += allis_map[r][c]
+            base_score += allis_map[r][c]
         elif val == flip_player_index(player_index):
-            score -= allis_map[r][c]
+            base_score -= allis_map[r][c]
 
-    return score
+    weighed_plus = \
+        3 * 2 * how_many_n_in_a_row(2, board.get_state(), player_index) + \
+        3 * 2 * how_many_n_in_a_column(2, board.get_state(), player_index) + \
+        3 * 2 * how_many_n_anti_skew(2, board.get_state(), player_index) + \
+        3 * 2 * how_many_n_skew(2, board.get_state(), player_index) + \
+        3 * 5 * how_many_n_in_a_row(3, board.get_state(), player_index) + \
+        3 * 5 * how_many_n_in_a_column(3, board.get_state(), player_index) + \
+        3 * 5 * how_many_n_anti_skew(3, board.get_state(), player_index) + \
+        3 * 5 * how_many_n_skew(3, board.get_state(), player_index)
+
+    weighed_minus = \
+        3 * 2 * how_many_n_in_a_row(2, board.get_state(), flip_player_index(player_index)) + \
+        3 * 2 * how_many_n_in_a_column(2, board.get_state(), flip_player_index(player_index)) + \
+        3 * 2 * how_many_n_anti_skew(2, board.get_state(), flip_player_index(player_index)) + \
+        3 * 2 * how_many_n_skew(2, board.get_state(), flip_player_index(player_index)) + \
+        3 * 100 * how_many_options_for_winning_in_next_move(board, flip_player_index(player_index))
+
+    return base_score + weighed_plus - weighed_minus
 
 
 def negamax(depth: int, board: Board, alpha: int = -np.inf, beta: int = np.inf) -> [int, int]:
@@ -189,6 +220,10 @@ def negamax(depth: int, board: Board, alpha: int = -np.inf, beta: int = np.inf) 
         if alpha >= beta:
             break
 
+    if best_column == -1:
+        logging.warning("no valid steps")
+        best_column = board.get_valid_steps()[0]
+
     return best_column, best_score
 
 
@@ -219,7 +254,7 @@ class StudentPlayer:
         if last_player_col != -1:
             self.__board.step(self.__other_player_index, last_player_col)
 
-        col, score = negamax(4, self.__board.copy())
+        col, score = negamax(2, self.__board.copy())
         logging.info(f"Player {self.__player_index} played {col} with score {score}")
 
         self.__board.step(self.__player_index, col)
