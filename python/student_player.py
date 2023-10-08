@@ -9,6 +9,78 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(filename='student_player.log', level=logging.DEBUG)
 
 
+def how_many_n_in_a_row(n: int, board: Board, player_index: int) -> int:
+    """
+    Counts how many times there are n in a row for player_index.
+    For example, for a row [0, 1, 1, 1, 0, 0, 1, 0, 1, 1] and n = 3, then there are 2 2 in a row for player 1.
+    But a sequence of 1, 1, 1, 1 there is only one 2 in a row.
+    :param n: how many adjacent cells to check for per row
+    :param board: state of the board
+    :param player_index: player index to check for
+    :return: number of times there are n in a row for player_index
+    """
+    n_in_a_row = 0
+    for row in board.get_state():
+        in_the_row = 0
+        for cell in row:
+            if cell == player_index:
+                in_the_row += 1
+            else:
+                if in_the_row >= n:
+                    n_in_a_row += 1
+                in_the_row = 0
+    return n_in_a_row
+
+
+def how_many_n_in_a_column(n: int, board: Board, player_index: int) -> int:
+    """
+    Counts how many times there are n in a column for player_index.
+    :param n: how many adjacent cells to check for per column
+    :param board: state of the board
+    :param player_index: player index to check for
+    :return: number of times there are n in a column for player_index
+    """
+    return how_many_n_in_a_row(n, board.get_state().T, player_index)
+
+
+def how_many_n_anti_skew(n: int, board: Board, player_index: int) -> int:
+    """
+    Counts how many times there are n in an anti-skew (left to right diagonal) for player_index.
+    :param n: how many 'adjacent' cells to check for per anti-skew
+    :param board: state of the board
+    :param player_index: player index to check for
+    :return: number of times there are n in an anti-skew for player_index
+    """
+    height = board.get_state().shape[0]
+    width = board.get_state().shape[1]
+    anti_skew_lines = [board.get_state().diagonal(i) for i in range(-height + 1, width)]
+
+    n_in_an_anti_skew = 0
+    for line in anti_skew_lines:
+        if len(line) < n:
+            continue
+        in_the_line = 0
+        for cell in line:
+            if cell == player_index:
+                in_the_line += 1
+            else:
+                if in_the_line >= n:
+                    n_in_an_anti_skew += 1
+                in_the_line = 0
+    return n_in_an_anti_skew
+
+
+def how_many_n_skew(n: int, board: Board, player_index: int) -> int:
+    """
+    Counts how many times there are n in a skew (right to left diagonal) for player_index.
+    :param n: how many 'adjacent' cells to check for per skew
+    :param board: state of the board
+    :param player_index:  player index to check for
+    :return: number of times there are n in a skew for player_index
+    """
+    return how_many_n_anti_skew(n, np.flipr(board), player_index)
+
+
 def heuristic_score(board: Board) -> int:
     """
     Heuristic score of the board state for the given player.
@@ -30,112 +102,8 @@ def heuristic_score(board: Board) -> int:
             return -np.inf
 
     score = 0
-    """
-    getting all exposed pieces:
-        everything that has a 0 as a neighbour
-    
-    for all exposed pieces:
-        can I make it longer?
-            if so, how many connected to it already?
-            apply weights and add/subtract to score
-        can I make it taller?
-            if so, how many connected to it already?
-            apply weights and add/subtract to score
-        can I expand it diagonally to the right (skew)?
-            if so, how many connected to it already?
-            apply weights and add/subtract to score
-        can I expand it diagonally to the left?
-            if so, how many connected to it already?
-            apply weights and add/subtract to score
-    """
     exponential_weight = 2
-
-    on_the_right_edge = lambda a, b: a == board.get_state().shape[1] - 1
-    on_the_left_edge = lambda a, b: a == 0
-    on_the_top_edge = lambda a, b: b == 0
-    on_the_bottom_edge = lambda a, b: b == board.get_state().shape[0] - 1
-
-    exposed_left = lambda a, b: not on_the_left_edge(a, b) and board.get_state()[b][a - 1] == 0
-    exposed_right = lambda a, b: not on_the_right_edge(a, b) and board.get_state()[b][a + 1] == 0
-    exposed_top = lambda a, b: not on_the_top_edge(a, b) and board.get_state()[b - 1][a] == 0
-    exposed_top_right = lambda a, b: not on_the_top_edge(a, b) and not on_the_right_edge(a, b) and board.get_state()[b - 1][a + 1] == 0
-    exposed_top_left = lambda a, b: not on_the_top_edge(a, b) and not on_the_left_edge(a, b) and board.get_state()[b - 1][a - 1] == 0
-    exposed_bottom_right = lambda a, b: not on_the_bottom_edge(a, b) and not on_the_right_edge(a, b) and board.get_state()[b + 1][a + 1] == 0
-    exposed_bottom_left = lambda a, b: not on_the_bottom_edge(a, b) and not on_the_left_edge(a, b) and board.get_state()[b + 1][a - 1] == 0
-
     change_in_score = lambda n, player: (exponential_weight ** n) * (1 if player == player_index else -1)
-
-    for (y, x), val in np.ndenumerate(board.get_state()):
-        if val == 0:
-            continue
-
-        # horizontal left
-        if exposed_left(x, y):
-            if exposed_bottom_left(x, y):  # it cannot be connected to anything (for now)
-                length = 0
-            else:
-                length = 1
-            n_x = x  # neighbour x
-            while not on_the_right_edge(n_x, y)\
-                    and board.get_state()[y][n_x + 1] == val:
-                n_x += 1
-                length += 1
-            score += change_in_score(length, val)
-
-        # horizontal right
-        if exposed_right(x, y):
-            if exposed_bottom_right(x, y):
-                length = 0
-            else:
-                length = 1
-            n_x = x  # neighbour x
-            while not on_the_left_edge(n_x, y)\
-                    and board.get_state()[y][n_x - 1] == val:
-                n_x -= 1
-                length += 1
-            score += change_in_score(length, val)
-
-        # vertical
-        if exposed_top(x, y):
-            length = 1
-            n_y = y  # neighbour y
-            while not on_the_bottom_edge(x, n_y)\
-                    and board.get_state()[n_y - 1][x] == val:
-                n_y -= 1
-                length += 1
-            score += change_in_score(length, val)
-
-        # skew
-        if exposed_top_right(x, y):
-            if exposed_right(x, y):  # it cannot be connected to anything (for now)
-                length = 0
-            else:
-                length = 1
-            n_x = x  # neighbour x
-            n_y = y  # neighbour y
-            while not on_the_right_edge(n_x, n_y)\
-                    and not on_the_bottom_edge(n_x, n_y)\
-                    and board.get_state()[n_y - 1][n_x + 1] == val:
-                n_x += 1
-                n_y -= 1
-                length += 1
-            score += change_in_score(length, val)
-
-        # anti-skew
-        if exposed_top_left(x, y):
-            if exposed_left(x, y):  # it cannot be connected to anything (for now)
-                length = 0
-            else:
-                length = 1
-            n_x = x  # neighbour x
-            n_y = y  # neighbour y
-            while not on_the_left_edge(n_x, n_y)\
-                    and not on_the_bottom_edge(n_x, n_y)\
-                    and board.get_state()[n_y - 1][n_x - 1] == val:
-                n_x -= 1
-                n_y -= 1
-                length += 1
-            score += change_in_score(length, val)
 
     return score
 
