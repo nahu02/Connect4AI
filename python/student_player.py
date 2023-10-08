@@ -105,39 +105,38 @@ def heuristic_score(board: Board) -> int:
     :return: number, where higher is better for the given player
     """
 
-    player_index = flip_player_index(board.get_last_player_index())
+    player_index = board.get_last_player_index()
+    opponent_index = flip_player_index(player_index)
 
+    # if the game ended, return the score based on who won
     if board.game_ended():
-        logger.debug("game ended")
-        winner = board.get_winner()
-        if winner == 0:
-            return 0
-        if winner == player_index:
-            return np.inf
+        if board.get_winner() == player_index:
+            return 1000
+        elif board.get_winner() == opponent_index:
+            return -1000
         else:
-            return -np.inf
+            return 0
 
-    if board.get_state().shape == (6, 7):
-        return alternate_heuristic_score_for_6_by_7_board(board)
+    # center column +2
+    center_column = board.get_state().shape[1] // 2
+    center_column_score = board.get_state().T[center_column].tolist().count(player_index) * 2
 
-    weighed_plus = \
-        2 * how_many_n_in_a_row(2, board.get_state(), player_index) + \
-        2 * how_many_n_in_a_column(2, board.get_state(), player_index) + \
-        2 * how_many_n_anti_skew(2, board.get_state(), player_index) + \
-        2 * how_many_n_skew(2, board.get_state(), player_index) + \
-        4 * how_many_n_in_a_row(3, board.get_state(), player_index) + \
-        4 * how_many_n_in_a_column(3, board.get_state(), player_index) + \
-        4 * how_many_n_anti_skew(3, board.get_state(), player_index) + \
-        4 * how_many_n_skew(3, board.get_state(), player_index)
+    # 3 in a row +5
+    connecting_threes_score = 5 * (how_many_n_in_a_row(3, board.get_state(), player_index) +
+                                   how_many_n_in_a_column(3, board.get_state(), player_index) +
+                                   how_many_n_anti_skew(3, board.get_state(), player_index) +
+                                   how_many_n_skew(3, board.get_state(), player_index))
 
-    weighed_minus = \
-        2 * how_many_n_in_a_row(2, board.get_state(), flip_player_index(player_index)) + \
-        2 * how_many_n_in_a_column(2, board.get_state(), flip_player_index(player_index)) + \
-        2 * how_many_n_anti_skew(2, board.get_state(), flip_player_index(player_index)) + \
-        2 * how_many_n_skew(2, board.get_state(), flip_player_index(player_index)) + \
-        100 * how_many_options_for_winning_in_next_move(board, flip_player_index(player_index))
+    # opponent's 2 in a row -2
+    opponent_connecting_twos_score = 2 * (how_many_n_in_a_row(2, board.get_state(), opponent_index) +
+                                          how_many_n_in_a_column(2, board.get_state(), opponent_index) +
+                                          how_many_n_anti_skew(2, board.get_state(), opponent_index) +
+                                          how_many_n_skew(2, board.get_state(), opponent_index))
 
-    return weighed_plus - weighed_minus
+    # opponent's winnable 3 in a rows -100
+    opponent_winnables_score = 100 * how_many_options_for_winning_in_next_move(board, opponent_index)
+
+    return center_column_score + connecting_threes_score - opponent_connecting_twos_score - opponent_winnables_score
 
 
 def alternate_heuristic_score_for_6_by_7_board(board: Board) -> int:
@@ -203,7 +202,8 @@ def negamax(depth: int, board: Board, alpha: int = -np.inf, beta: int = np.inf) 
         logging.debug(f"depth: {depth}, score: {heuristic_score(board)} if player {player_index} plays column {board.get_last_player_column()}")
         if board.game_ended():
             logging.debug(f"game ended, winner: {board.get_winner()}, score: {heuristic_score(board)}")
-        return board.get_last_player_column(), heuristic_score(board)
+        return board.get_last_player_column(),\
+            heuristic_score(board) * 1 if board.get_last_player_index() == player_index else -1
 
     best_score = -np.inf
     best_column = -1
@@ -254,7 +254,7 @@ class StudentPlayer:
         if last_player_col != -1:
             self.__board.step(self.__other_player_index, last_player_col)
 
-        col, score = negamax(2, self.__board.copy())
+        col, score = negamax(5, self.__board.copy())
         logging.info(f"Player {self.__player_index} played {col} with score {score}")
 
         self.__board.step(self.__player_index, col)
