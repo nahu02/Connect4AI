@@ -9,18 +9,18 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(filename='student_player.log', level=logging.DEBUG)
 
 
-def how_many_n_in_a_row(n: int, board: Board, player_index: int) -> int:
+def how_many_n_in_a_row(n: int, board_state: np.ndarray, player_index: int) -> int:
     """
     Counts how many times there are n in a row for player_index.
     For example, for a row [0, 1, 1, 1, 0, 0, 1, 0, 1, 1] and n = 3, then there are 2 2 in a row for player 1.
     But a sequence of 1, 1, 1, 1 there is only one 2 in a row.
     :param n: how many adjacent cells to check for per row
-    :param board: state of the board
+    :param board_state: state of the board (board.get_state())
     :param player_index: player index to check for
     :return: number of times there are n in a row for player_index
     """
     n_in_a_row = 0
-    for row in board.get_state():
+    for row in board_state:
         in_the_row = 0
         for cell in row:
             if cell == player_index:
@@ -32,28 +32,28 @@ def how_many_n_in_a_row(n: int, board: Board, player_index: int) -> int:
     return n_in_a_row
 
 
-def how_many_n_in_a_column(n: int, board: Board, player_index: int) -> int:
+def how_many_n_in_a_column(n: int, board_state: np.ndarray, player_index: int) -> int:
     """
     Counts how many times there are n in a column for player_index.
     :param n: how many adjacent cells to check for per column
-    :param board: state of the board
+    :param board_state: state of the board (board.get_state())
     :param player_index: player index to check for
     :return: number of times there are n in a column for player_index
     """
-    return how_many_n_in_a_row(n, board.get_state().T, player_index)
+    return how_many_n_in_a_row(n, board_state.T, player_index)
 
 
-def how_many_n_anti_skew(n: int, board: Board, player_index: int) -> int:
+def how_many_n_anti_skew(n: int, board_state: np.ndarray, player_index: int) -> int:
     """
     Counts how many times there are n in an anti-skew (left to right diagonal) for player_index.
     :param n: how many 'adjacent' cells to check for per anti-skew
-    :param board: state of the board
+    :param board_state: state of the board (board.get_state())
     :param player_index: player index to check for
     :return: number of times there are n in an anti-skew for player_index
     """
-    height = board.get_state().shape[0]
-    width = board.get_state().shape[1]
-    anti_skew_lines = [board.get_state().diagonal(i) for i in range(-height + 1, width)]
+    height = board_state.shape[0]
+    width = board_state.shape[1]
+    anti_skew_lines = [board_state.diagonal(i) for i in range(-height + 1, width)]
 
     n_in_an_anti_skew = 0
     for line in anti_skew_lines:
@@ -70,21 +70,21 @@ def how_many_n_anti_skew(n: int, board: Board, player_index: int) -> int:
     return n_in_an_anti_skew
 
 
-def how_many_n_skew(n: int, board: Board, player_index: int) -> int:
+def how_many_n_skew(n: int, board_state: np.ndarray, player_index: int) -> int:
     """
     Counts how many times there are n in a skew (right to left diagonal) for player_index.
     :param n: how many 'adjacent' cells to check for per skew
-    :param board: state of the board
+    :param board_state: state of the board (board.get_state())
     :param player_index:  player index to check for
     :return: number of times there are n in a skew for player_index
     """
-    return how_many_n_anti_skew(n, np.flipr(board), player_index)
+    return how_many_n_anti_skew(n, np.flip(board_state, axis=1), player_index)
 
 
 def heuristic_score(board: Board) -> int:
     """
-    Heuristic score of the board state for the given player.
-    Works only for 2 players.
+    Heuristic score of the board state for the player that just played.
+    Works only for 2 players, and for 4 in a row.
     :param board: board state
     :return: number, where higher is better for the given player
     """
@@ -92,7 +92,7 @@ def heuristic_score(board: Board) -> int:
     player_index = flip_player_index(board.get_last_player_index())
 
     if board.game_ended():
-        logger.debug('game ended')
+        logger.debug("game ended")
         winner = board.get_winner()
         if winner == 0:
             return 0
@@ -101,11 +101,27 @@ def heuristic_score(board: Board) -> int:
         else:
             return -np.inf
 
-    score = 0
-    exponential_weight = 2
-    change_in_score = lambda n, player: (exponential_weight ** n) * (1 if player == player_index else -1)
+    weighed_plus = \
+        2 * how_many_n_in_a_row(2, board.get_state(), player_index) + \
+        2 * how_many_n_in_a_column(2, board.get_state(), player_index) + \
+        2 * how_many_n_anti_skew(2, board.get_state(), player_index) + \
+        2 * how_many_n_skew(2, board.get_state(), player_index) + \
+        4 * how_many_n_in_a_row(3, board.get_state(), player_index) + \
+        4 * how_many_n_in_a_column(3, board.get_state(), player_index) + \
+        4 * how_many_n_anti_skew(3, board.get_state(), player_index) + \
+        4 * how_many_n_skew(3, board.get_state(), player_index)
 
-    return score
+    weighed_minus = \
+        2 * how_many_n_in_a_row(2, board.get_state(), flip_player_index(player_index)) + \
+        2 * how_many_n_in_a_column(2, board.get_state(), flip_player_index(player_index)) + \
+        2 * how_many_n_anti_skew(2, board.get_state(), flip_player_index(player_index)) + \
+        2 * how_many_n_skew(2, board.get_state(), flip_player_index(player_index)) + \
+        4 * how_many_n_in_a_row(3, board.get_state(), flip_player_index(player_index)) + \
+        4 * how_many_n_in_a_column(3, board.get_state(), flip_player_index(player_index)) + \
+        4 * how_many_n_anti_skew(3, board.get_state(), flip_player_index(player_index)) + \
+        4 * how_many_n_skew(3, board.get_state(), flip_player_index(player_index))
+
+    return weighed_plus - weighed_minus
 
 
 def negamax(depth: int, board: Board) -> [int, int]:
@@ -165,7 +181,7 @@ class StudentPlayer:
         if last_player_col != -1:
             self.__board.step(self.__other_player_index, last_player_col)
 
-        col, score = negamax(1, self.__board.copy())
+        col, score = negamax(3, self.__board.copy())
         logging.info(f"Player {self.__player_index} played {col} with score {score}")
 
         self.__board.step(self.__player_index, col)
