@@ -236,7 +236,7 @@ class StudentPlayer:
         if last_player_col != -1:
             self.__board.step(self.__other_player_index, last_player_col)
 
-        score, col = minimax(4, self.__board.copy(), True)
+        score, col = minimax(6, self.__board.copy(), True)
         logging.info(f"Player {self.__player_index} played {col} with score {score}")
 
         self.__board.step(self.__player_index, col)
