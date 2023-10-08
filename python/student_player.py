@@ -6,7 +6,7 @@ import numpy as np
 from board import Board
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename='student_player.log', level=logging.INFO)
+logging.basicConfig(filename='student_player.log', level=logging.DEBUG)
 
 
 def how_many_n_in_a_row(n: int, board_state: np.ndarray, player_index: int) -> int:
@@ -101,6 +101,9 @@ def heuristic_score(board: Board) -> int:
         else:
             return -np.inf
 
+    if board.get_state().shape == (6, 7):
+        return alternate_heuristic_score_for_6_by_7_board(board)
+
     weighed_plus = \
         2 * how_many_n_in_a_row(2, board.get_state(), player_index) + \
         2 * how_many_n_in_a_column(2, board.get_state(), player_index) + \
@@ -122,6 +125,36 @@ def heuristic_score(board: Board) -> int:
         4 * how_many_n_skew(3, board.get_state(), flip_player_index(player_index))
 
     return weighed_plus - weighed_minus
+
+
+def alternate_heuristic_score_for_6_by_7_board(board: Board) -> int:
+    """
+    Heuristic score of the board state for the player that just played.
+    Does not check for game end, assumes this has already been checked.
+    Based on http://connect4hci.weebly.com/.
+    :param board: board state
+    :return: number, where higher is better for the given player
+    """
+    player_index = flip_player_index(board.get_last_player_index())
+
+    # map of how "good" each cell is, based on how many of all possible 4 in a rows it is a part of
+    # I named it allis_map because it's based on the Allis paper, that solved connect 4
+    allis_map = np.array([
+        [3, 4,  5,  7,  5, 4, 3],
+        [4, 6,  8,  9,  8, 6, 4],
+        [5, 8, 11, 13, 11, 8, 5],
+        [5, 8, 11, 13, 11, 8, 5],
+        [4, 6,  8,  9,  8, 6, 4],
+        [3, 4,  5,  7,  5, 4, 3]])
+
+    score = 0
+    for (r, c), val in np.ndenumerate(board.get_state()):
+        if val == player_index:
+            score += allis_map[r][c]
+        elif val == flip_player_index(player_index):
+            score -= allis_map[r][c]
+
+    return score
 
 
 def negamax(depth: int, board: Board, alpha: int = -np.inf, beta: int = np.inf) -> [int, int]:
@@ -186,7 +219,7 @@ class StudentPlayer:
         if last_player_col != -1:
             self.__board.step(self.__other_player_index, last_player_col)
 
-        col, score = negamax(6, self.__board.copy())
+        col, score = negamax(4, self.__board.copy())
         logging.info(f"Player {self.__player_index} played {col} with score {score}")
 
         self.__board.step(self.__player_index, col)

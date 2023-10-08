@@ -5,3 +5,4 @@
  - [Algorithms Explained – minimax and alpha-beta pruning](https://youtu.be/l-hh51ncgDI) by Sebastian Lague
  - [Minimax: How Computers Play Games](https://youtu.be/SLgZhpDsrfc) by Spanning Tree
  - [Negamax](https://en.wikipedia.org/wiki/Negamax) on Wikipedia 
+ - [Heuristic rules for connect 4](http://connect4hci.weebly.com/methodology.html) by Jorelle See, Leom Sheng Teng, and Hrithik Sekhri
